@@ -32,6 +32,26 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
     port: 8080,
+    proxy: {
+      '/socket.io': {
+        target: 'https://localhost:3001', // Porta do seu servidor Socket.io
+        ws: true, // Importante para WebSocket
+        changeOrigin: true,
+        secure: false, // Para desenvolvimento local
+        rewrite: (path) => path.replace(/^\/socket.io/, ''),
+         headers: {
+          Connection: "Upgrade",
+          Upgrade: "websocket"
+        }
+      },
+      '/api': {
+        target: 'http://localhost:3001', // Ou a porta do seu backend API
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/api/, '/api')
+      }
+    }
+
   },
   plugins: [
     react(),
@@ -51,16 +71,35 @@ export default defineConfig(({ mode }) => ({
   build: {
     rollupOptions: {
       output: {
-        manualChunks: {
-          react: ['react', 'react-dom', 'react-router-dom'],
-          ui: ['@radix-ui/react-dialog', '@radix-ui/react-dropdown-menu'],
-          vendor: ['lodash', 'axios', 'date-fns'],
+        // manualChunks: {
+        //   react: ['react', 'react-dom', 'react-router-dom'],
+        //   ui: ['@radix-ui/react-dialog', '@radix-ui/react-dropdown-menu'],
+        //   vendor: ['lodash', 'axios', 'date-fns'],
+        //   socket: ['socket.io-client'],
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('socket.io-client')) {
+              return 'socket';
+            }
+            if (id.includes('react')) {
+              return 'react';
+            }
+            if (id.includes('@radix-ui')) {
+              return 'ui';
+            }
+            return 'vendor';
+          }
         },
       },
     },
     chunkSizeWarningLimit: 1000,
   },
   optimizeDeps: {
-    include: ['react', 'react-dom', 'react-router-dom'],
+    include: ['react', 
+              'react-dom', 
+              'react-router-dom',
+              'socket.io-client'
+              ],
+              exclude: [''],
   },
 }));

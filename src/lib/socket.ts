@@ -2,7 +2,9 @@
 import { io, Socket } from 'socket.io-client';
 
 // Socket.io client configuration
-const SOCKET_URL = 'ws://localhost:3001'; // Altere para seu servidor Socket.io
+const SOCKET_URL = 'https://localhost:3001'; // Altere para seu servidor Socket.io
+
+
 
 let socket: Socket | null = null;
 
@@ -13,18 +15,36 @@ export const initializeSocket = () => {
       reconnection: true,
       reconnectionAttempts: 5,
       reconnectionDelay: 1000,
+      transports: ['websocket'],
+      path: '/socket.io',
+      secure: false
     });
+
+    // Eventos de conexão
 
     socket.on('connect', () => {
       console.log('🔗 Conectado ao servidor Socket.io');
     });
 
-    socket.on('disconnect', () => {
-      console.log('🔌 Desconectado do servidor Socket.io');
+    socket.on('disconnect', (reason) => {
+      console.log('🔌 Desconectado do servidor Socket.io',reason);
+      if(reason === 'io server disconnect'){
+
+        socket?.connect
+      }
     });
 
     socket.on('connect_error', (error) => {
-      console.error('❌ Erro de conexão Socket.io:', error);
+      console.error('❌ Erro de conexão Socket.io:', error.message);
+
+      setTimeout(() => {
+        if(socket && !socket.connected){
+          socket.io.opts.transports = ['polling','websocket'];
+
+          socket.connect();
+        }
+      },1000);
+
     });
   }
 

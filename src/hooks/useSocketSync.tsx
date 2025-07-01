@@ -19,6 +19,8 @@ interface OptimisticUpdate<T> {
   status: 'pending' | 'confirmed' | 'failed';
 }
 
+
+
 export const useSocketSync = <T,>(options: SocketSyncOptions) => {
   const [isConnected, setIsConnected] = useState(false);
   const [optimisticUpdates, setOptimisticUpdates] = useState<OptimisticUpdate<T>[]>([]);

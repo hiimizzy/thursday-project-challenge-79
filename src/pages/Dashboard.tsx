@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { SidebarProvider, SidebarTrigger, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from '@/components/AppSidebar';
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { 
   Search, 
+  Plus, 
   Calendar, 
   Users, 
   Clock, 
@@ -23,13 +24,14 @@ import {
   CircleHelp
 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import CreateProjectDialog from '@/components/CreateProjectDialog';
 import InviteMembersDialog from '@/components/InviteMembersDialog';
 import ProjectSearch from '@/components/ProjectSearch';
-import { useSocketSync } from '@/hooks/useSocketSync';
-import { usePermissions } from '@/hooks/usePermissions';
-import { initializeSocket, getSocket, socketEvents } from '@/lib/socket';
-import ThemeToggle from '@/components/ThemeToggle';
+import { useRealtimeSync } from '@/hooks/useRealtimeSync';
 import HelpDialog from '@/components/HelpDialog';
+import ThemeToggle from '@/components/ThemeToggle';
+import emailjs from '@emailjs/browser';
+
 
 interface Project {
   id: string;
@@ -59,33 +61,57 @@ interface SearchFilters {
   assignee: string;
 }
 
-// Mock data para demonstração
 const mockCompanies: Company[] = [
-  { id: 'company-1', name: 'Empresa Demo', role: 'admin' }
+  { id: '1', name: 'Minha Empresa', role: 'admin' },
+  { id: '2', name: 'Freelance Projects', role: 'member' },
 ];
 
 const mockProjects: Project[] = [
   {
-    id: 'project-1',
-    name: 'Projeto Exemplo',
-    description: 'Um projeto de demonstração',
+    id: '1',
+    name: 'Redesign do Site',
+    description: 'Atualização completa da interface do usuário',
     status: 'active',
-    members: 3,
-    tasks: 10,
-    completedTasks: 7,
-    dueDate: new Date().toISOString(),
+    members: 4,
+    tasks: 12,
+    completedTasks: 8,
+    dueDate: '2024-01-15',
+    favorite: true,
+    companyId: '1'
+  },
+  {
+    id: '2',
+    name: 'App Mobile',
+    description: 'Desenvolvimento do aplicativo móvel',
+    status: 'active',
+    members: 6,
+    tasks: 24,
+    completedTasks: 15,
+    dueDate: '2024-02-28',
     favorite: false,
-    companyId: 'company-1'
+    companyId: '1'
+  },
+  {
+    id: '3',
+    name: 'Sistema de CRM',
+    description: 'Implementação do sistema de gestão de clientes',
+    status: 'paused',
+    members: 3,
+    tasks: 18,
+    completedTasks: 5,
+    dueDate: '2024-03-10',
+    favorite: true,
+    companyId: '2'
   }
 ];
 
 const Dashboard = () => {
   const [allProjects, setAllProjects] = useState<Project[]>(mockProjects);
   const [companies, setCompanies] = useState<Company[]>(mockCompanies);
-  const [currentCompany, setCurrentCompany] = useState<Company | null>(mockCompanies[0]);
+  const [currentCompany, setCurrentCompany] = useState<Company>(mockCompanies[0]);
   const [profileImage, setProfileImage] = useState('');
+  const [isCreateProjectOpen, setIsCreateProjectOpen] = useState(false);
   const [isInviteOpen, setIsInviteOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
   const [filters, setFilters] = useState<SearchFilters>({
     search: '',
     status: 'all',
@@ -97,193 +123,38 @@ const Dashboard = () => {
   
   const { toast } = useToast();
   
-  // Usar permissões
-  const { permissions, user } = usePermissions(currentCompany?.id || '');
-  
-  // Sincronização em tempo real com Socket.io
-  const { isConnected } = useSocketSync({
-    room: `company-${currentCompany?.id}`,
+  // Fix: Pass proper options object to useRealtimeSync
+  useRealtimeSync({
     entityType: 'company',
-    entityId: currentCompany?.id || '',
+    entityId: currentCompany.id,
     onUpdate: (data) => {
-      console.log('📡 Empresa atualizada via Socket.io:', data);
-      // Recarregar projetos quando houver atualizações
-      if (data.event === 'UPDATE' || data.event === 'INSERT') {
-        loadProjects();
-      }
+      console.log('Received realtime update:', data);
     },
     onError: (error) => {
-      console.error('❌ Erro na sincronização via Socket.io:', error);
+      console.error('Realtime sync error:', error);
     }
   });
 
-  // Inicializar Socket.io
-  useEffect(() => {
-    const socket = initializeSocket();
-    console.log('🔗 Socket.io inicializado no Dashboard');
-    
-    return () => {
-      console.log('🔌 Limpando conexão Socket.io do Dashboard');
-    };
-  }, []);
-
-  // Carregar projetos da empresa atual
-  const loadProjects = useCallback(async () => {
-    if (!currentCompany || !user) return;
-
-    try {
-      // Chamar API
-      // const response = await fetch(`/api/projects?companyId=${currentCompany.id}`);
-      // const projectsData = await response.json();
-      
-      // Por enquanto, usando dados mock
-      console.log('📂 Carregando projetos da empresa:', currentCompany.name);
-      setAllProjects(mockProjects);
-      
-    } catch (error) {
-      console.error('❌ Erro ao carregar projetos:', error);
-    }
-  }, [currentCompany, user]);
-
-  useEffect(() => {
-    loadProjects();
-  }, [loadProjects]);
-
+  // Fix NaN% 
   const getProgressPercentage = (completed: number, total: number) => {
     if (total === 0) return 0;
     return Math.round((completed / total) * 100);
   };
 
   // Filtrar projetos pela empresa atual
-  const projects = allProjects.filter(project => project.companyId === currentCompany?.id);
+  const projects = allProjects.filter(project => project.companyId === currentCompany.id);
 
-  const handleCreateProject = async (newProject: Project) => {
-    if (!permissions.canEdit || !currentCompany || !user) {
-      toast({
-        title: "❌ Sem permissão",
-        description: "Você não tem permissão para criar projetos",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    try {
-      // Simular chamada para API
-      const projectData = {
-        id: Date.now().toString(),
-        name: newProject.name,
-        description: newProject.description,
-        companyId: currentCompany.id,
-        status: 'active' as const,
-        members: 1,
-        tasks: 0,
-        completedTasks: 0,
-        dueDate: newProject.dueDate,
-        favorite: false
-      };
-
-      // Atualizar lista local
-      setAllProjects(prev => [projectData, ...prev]);
-      
-      // Emitir evento via Socket.io
-      const socket = getSocket();
-      if (socket) {
-        socket.emit(socketEvents.PROJECT_CREATED, {
-          project: projectData,
-          companyId: currentCompany.id,
-          user: user.name || user.email
-        });
-      }
-      
-      toast({
-        title: "✅ Projeto criado!",
-        description: `${newProject.name} foi criado com sucesso.`,
-      });
-
-    } catch (error) {
-      console.error('❌ Erro ao criar projeto:', error);
-      toast({
-        title: "❌ Erro ao criar projeto",
-        description: "Tente novamente mais tarde",
-        variant: "destructive"
-      });
-    }
-  };
-
-  const toggleFavorite = async (projectId: string) => {
-    const project = allProjects.find(p => p.id === projectId);
-    if (!project || !permissions.canEdit) return;
-
-    // Atualização otimista
-    setAllProjects(allProjects.map(project => 
-      project.id === projectId 
-        ? { ...project, favorite: !project.favorite }
-        : project
-    ));
-
-    try {
-      // Simular chamada para API
-      console.log('⭐ Alternando favorito do projeto:', projectId);
-      
-      // Emitir evento via Socket.io
-      const socket = getSocket();
-      if (socket) {
-        socket.emit(socketEvents.PROJECT_UPDATED, {
-          projectId,
-          favorite: !project.favorite,
-          user: user.name || user.email
-        });
-      }
-      
-    } catch (error) {
-      console.error('❌ Erro ao atualizar favorito:', error);
-      // Reverter mudança em caso de erro
-      setAllProjects(allProjects.map(project => 
-        project.id === projectId 
-          ? { ...project, favorite: project.favorite }
-          : project
-      ));
-    }
-  };
-
-  const deleteProject = async (projectId: string) => {
-    if (!permissions.canDelete) {
-      toast({
-        title: "❌ Sem permissão",
-        description: "Você não tem permissão para deletar projetos",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    try {
-      // Simular chamada para API
-      console.log('🗑️ Deletando projeto:', projectId);
-      
-      setAllProjects(allProjects.filter(project => project.id !== projectId));
-      
-      // Emitir evento via Socket.io
-      const socket = getSocket();
-      if (socket) {
-        socket.emit(socketEvents.PROJECT_DELETED, {
-          projectId,
-          user: user.name || user.email
-        });
-      }
-      
-      toast({
-        title: "✅ Projeto excluído",
-        description: "O projeto foi excluído com sucesso.",
-      });
-
-    } catch (error) {
-      console.error('❌ Erro ao deletar projeto:', error);
-      toast({
-        title: "❌ Erro ao deletar projeto",
-        description: "Tente novamente mais tarde",
-        variant: "destructive"
-      });
-    }
+  const handleCreateProject = (newProject: Project) => {
+    const projectWithCompany = {
+      ...newProject,
+      companyId: currentCompany.id
+    };
+    setAllProjects([...allProjects, projectWithCompany]);
+    setIsCreateProjectOpen(false);
+    toast({
+      title: "Projeto criado!",
+      description: `${newProject.name} foi criado com sucesso.`,
+    });
   };
 
   const handleCreateCompany = (name: string) => {
@@ -308,6 +179,23 @@ const Dashboard = () => {
     });
   };
 
+  const toggleFavorite = (projectId: string) => {
+    setAllProjects(allProjects.map(project => 
+      project.id === projectId 
+        ? { ...project, favorite: !project.favorite }
+        : project
+    ));
+  };
+
+  const deleteProject = (projectId: string) => {
+    setAllProjects(allProjects.filter(project => project.id !== projectId));
+    toast({
+      title: "Projeto excluído",
+      description: "O projeto foi excluído com sucesso.",
+      variant: "destructive"
+    });
+  };
+
   const clearFilters = () => {
     setFilters({
       search: '',
@@ -319,7 +207,8 @@ const Dashboard = () => {
     });
   };
 
-  const filteredProjects = projects?.filter(project => {
+  // Aplicar filtros
+  const filteredProjects = projects.filter(project => {
     const matchesSearch = project.name.toLowerCase().includes(filters.search.toLowerCase()) ||
                          project.description.toLowerCase().includes(filters.search.toLowerCase());
     
@@ -360,26 +249,6 @@ const Dashboard = () => {
     }
   };
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gray-50 dark:bg-slate-900 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600 dark:text-slate-300">Carregando dados...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!currentCompany) {
-    return (
-      <div className="min-h-screen bg-gray-50 dark:bg-slate-900 flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-gray-600 dark:text-slate-300">Nenhuma empresa encontrada</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <SidebarProvider>
@@ -394,48 +263,62 @@ const Dashboard = () => {
           onCompanyChange={handleCompanyChange}
           onCreateCompany={handleCreateCompany}
         />
+
         
         <SidebarInset className="flex-1">
-          <header className="flex h-14 shrink-0 items-center gap-2 border-b px-3 sm:px-4 md:hidden">
+          {/* Header Mobile */}
+          <header className="flex h-14 items-center shrink-0 items-center gap-2 border-b px-4 md:hidden">
             <SidebarTrigger className="h-8 w-8" />
-            <div className="flex items-center gap-2 flex-1 min-w-0">
-              <Building className="h-4 w-4 text-blue-600 flex-shrink-0" />
+            <div className="flex items-center gap-2 flex-1">
+              <Building className="h-4 w-4 text-blue-600  flex-shrink-0" />
               <h1 className="text-base font-semibold truncate">{currentCompany.name}</h1>
-              {isConnected && <div className="h-2 w-2 bg-green-500 rounded-full" title="Socket.io Conectado" />}
             </div>
             <div className="flex gap-1">
+              {/* Dark/Light */}
               <ThemeToggle />
               <HelpDialog trigger={
                 <Button variant="outline" size="sm" className="h-8 w-8 p-0">
                   <CircleHelp className="h-4 w-4" />
                 </Button>
               } />
+              {/* Convidar */}
+              <Button onClick={() => setIsInviteOpen(true)} variant="outline" size="sm">
+                <Users className="h-4 w-4" />
+              </Button>
+
+              <CreateProjectDialog onCreateProject={handleCreateProject}/>
+              
+              {/* Botão mobile */} 
+              {/* <Button className="bg-blue-500 hover:bg-blue-700" onClick={() => setIsCreateProjectOpen(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              New
+              </Button> */}
             </div>
           </header>
 
-          <div className="flex-1 space-y-4 p-3 sm:p-4 md:p-6 lg:p-8">
+          <div className="flex-1 space-y-4 p-4 md:p-8">
             {/* Header Desktop */}
             <div className="hidden md:flex md:items-center md:justify-between">
               <div>
-                <div className="flex items-center gap-2">
-                  <h1 className="text-2xl lg:text-3xl font-bold tracking-tight">Dashboard</h1>
-                  {isConnected && (
-                    <div className="flex items-center gap-1 text-xs text-green-600">
-                      <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse" />
-                      Socket.io
-                    </div>
-                  )}
-                </div>
-                <p className="text-muted-foreground text-sm lg:text-base">
+                <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+                <p className="text-muted-foreground">
                   Gerencie seus projetos em {currentCompany.name}
                 </p>
               </div>
               <div className="flex gap-2">
                 <ThemeToggle />
                 <HelpDialog />
+                <Button onClick={() => setIsInviteOpen(true)} variant="outline">
+                  <Users className="h-4 w-4 mr-2" />
+                  Convidar
+                </Button>
+                
+                <CreateProjectDialog onCreateProject={handleCreateProject}/> 
+                
               </div>
             </div>
 
+            {/* Busca e Filtros Avançados */}
             <ProjectSearch 
               filters={filters}
               onFiltersChange={setFilters}
@@ -443,17 +326,17 @@ const Dashboard = () => {
             />
 
             {/* Estatísticas */}
-            <div className="grid gap-3 sm:gap-4 grid-cols-2 md:grid-cols-4">
+            <div className="grid gap-4 md:grid-cols-4">
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-xs sm:text-sm font-medium">
-                    Projetos
+                  <CardTitle className="text-sm font-medium">
+                    Total de Projetos
                   </CardTitle>
-                  <FolderKanban className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
+                  <FolderKanban className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-lg sm:text-2xl font-bold">{projects?.length}</div>
-                  <p className="text-xs text-muted-foreground truncate">
+                  <div className="text-2xl font-bold">{projects.length}</div>
+                  <p className="text-xs text-muted-foreground">
                     em {currentCompany.name}
                   </p>
                 </CardContent>
@@ -461,14 +344,14 @@ const Dashboard = () => {
               
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-xs sm:text-sm font-medium">
-                    Ativos
+                  <CardTitle className="text-sm font-medium">
+                    Projetos Ativos
                   </CardTitle>
                   <div className="h-2 w-2 bg-green-500 rounded-full"></div>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-lg sm:text-2xl font-bold">
-                    {projects?.filter(p => p.status === 'active').length}
+                  <div className="text-2xl font-bold">
+                    {projects.filter(p => p.status === 'active').length}
                   </div>
                   <p className="text-xs text-muted-foreground">
                     Em andamento
@@ -478,34 +361,34 @@ const Dashboard = () => {
               
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-xs sm:text-sm font-medium">
-                    Concluídas
+                  <CardTitle className="text-sm font-medium">
+                    Tarefas Concluídas
                   </CardTitle>
                   <div className="h-2 w-2 bg-blue-500 rounded-full"></div>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-lg sm:text-2xl font-bold">
-                    {projects?.reduce((acc, p) => acc + p.completedTasks, 0)}
+                  <div className="text-2xl font-bold">
+                    {projects.reduce((acc, p) => acc + p.completedTasks, 0)}
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Tarefas
+                    De {projects.reduce((acc, p) => acc + p.tasks, 0)} tarefas
                   </p>
                 </CardContent>
               </Card>
               
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-xs sm:text-sm font-medium">
-                    Membros
+                  <CardTitle className="text-sm font-medium">
+                    Membros da Equipe
                   </CardTitle>
-                  <Users className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
+                  <Users className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-lg sm:text-2xl font-bold">
-                    {projects?.length > 0 ? Math.max(...projects.map(p => p.members)) : 0}
+                  <div className="text-2xl font-bold">
+                    {projects.length > 0 ? Math.max(...projects.map(p => p.members)) : 0}
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Ativos
+                    Membros ativos
                   </p>
                 </CardContent>
               </Card>
@@ -514,22 +397,22 @@ const Dashboard = () => {
             {/* Lista de Projetos */}
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h2 className="text-lg sm:text-xl font-semibold">Seus Projetos</h2>
-                <span className="text-xs sm:text-sm text-muted-foreground">
-                  {filteredProjects?.length} projeto(s)
+                <h2 className="text-xl font-semibold">Seus Projetos</h2>
+                <span className="text-sm text-muted-foreground">
+                  {filteredProjects.length} projeto(s) encontrado(s)
                 </span>
               </div>
               
-              <div className="grid gap-3 sm:gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-                {filteredProjects?.map((project) => (
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {filteredProjects.map((project) => (
                   <Card key={project.id} className="hover:shadow-md transition-shadow">
                     <CardHeader className="pb-3">
                       <div className="flex items-start justify-between">
-                        <div className="space-y-1 min-w-0 flex-1">
-                          <CardTitle className="text-base sm:text-lg truncate">{project.name}</CardTitle>
-                          <CardDescription className="text-xs sm:text-sm line-clamp-2">{project.description}</CardDescription>
+                        <div className="space-y-1">
+                          <CardTitle className="text-lg">{project.name}</CardTitle>
+                          <CardDescription>{project.description}</CardDescription>
                         </div>
-                        <div className="flex items-center space-x-1 ml-2">
+                        <div className="flex items-center space-x-1">
                           <Button
                             variant="ghost"
                             size="sm"
@@ -552,8 +435,8 @@ const Dashboard = () => {
                               {/* <DropdownMenuItem>
                                 <Eye className="mr-2 h-4 w-4" />
                                 Visualizar
-                              </DropdownMenuItem>
-                              <DropdownMenuItem>
+                              </DropdownMenuItem> */}
+                              {/* <DropdownMenuItem>
                                 <Edit className="mr-2 h-4 w-4" />
                                 Editar
                               </DropdownMenuItem> */}
@@ -569,19 +452,14 @@ const Dashboard = () => {
                         </div>
                       </div>
                     </CardHeader>
-                    <CardContent className="space-y-3 sm:space-y-4">
+                    <CardContent className="space-y-4">
                       <div className="flex items-center justify-between text-sm">
                         <Badge className={getStatusColor(project.status)}>
                           {getStatusText(project.status)}
                         </Badge>
-                        <div className="flex items-center text-muted-foreground text-xs">
-                          <Calendar className="mr-1 h-3 w-3" />
-                          <span className="hidden sm:inline">
-                            {new Date(project.dueDate).toLocaleDateString('pt-BR')}
-                          </span>
-                          <span className="sm:hidden">
-                            {new Date(project.dueDate).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
-                          </span>
+                        <div className="flex items-center text-muted-foreground">
+                          <Calendar className="mr-1 h-4 w-4" />
+                          {new Date(project.dueDate).toLocaleDateString('pt-BR')}
                         </div>
                       </div>
                       
@@ -613,8 +491,7 @@ const Dashboard = () => {
                         </div>
                         <div className="flex items-center text-xs text-muted-foreground">
                           <Clock className="mr-1 h-3 w-3" />
-                          <span className="hidden sm:inline">Atualizado há 2h</span>
-                          <span className="sm:hidden">2h</span>
+                          Atualizado há 2h
                         </div>
                       </div>
                     </CardContent>
@@ -622,15 +499,19 @@ const Dashboard = () => {
                 ))}
               </div>
               
-              {filteredProjects?.length === 0 && (
-                <div className="text-center py-8 sm:py-12">
+              {filteredProjects.length === 0 && (
+                <div className="text-center py-12">
                   <div className="mx-auto h-12 w-12 text-muted-foreground mb-4">
                     <Search className="h-full w-full" />
                   </div>
-                  <h3 className="text-base sm:text-lg font-semibold mb-2">Nenhum projeto encontrado</h3>
-                  <p className="text-muted-foreground mb-4 text-sm px-4">
+                  <h3 className="text-lg font-semibold mb-2">Nenhum projeto encontrado</h3>
+                  <p className="text-muted-foreground mb-4">
                     Tente ajustar os filtros ou criar um novo projeto.
                   </p>
+                  {/* <Button onClick={() => setIsCreateProjectOpen(true)}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Novo Projeto
+                  </Button>  */}
                 </div>
               )}
             </div>
@@ -638,7 +519,8 @@ const Dashboard = () => {
         </SidebarInset>
       </div>
 
-      {/* Diálogos */}
+
+
       <InviteMembersDialog 
         open={isInviteOpen}
         onOpenChange={setIsInviteOpen}
