@@ -31,6 +31,11 @@ export const useRealtimeSync = <T,>(options: RealtimeHookOptions) => {
     
     console.log(`🔗 Conectando via Socket.io: ${options.entityType}-${options.entityId}`);
 
+    // Define event names here so they're available in cleanup
+    const updateEvent = `${options.entityType}:updated`;
+    const createEvent = `${options.entityType}:created`;
+    const deleteEvent = `${options.entityType}:deleted`;
+
     if (socketInstance) {
       socketInstance.on('connect', () => {
         console.log(`📡 Conectado via Socket.io`);
@@ -48,11 +53,6 @@ export const useRealtimeSync = <T,>(options: RealtimeHookOptions) => {
         console.log(`🔌 Desconectado do Socket.io`);
         setIsConnected(false);
       });
-
-      // Escutar atualizações específicas do tipo de entidade
-      const updateEvent = `${options.entityType}:updated`;
-      const createEvent = `${options.entityType}:created`;
-      const deleteEvent = `${options.entityType}:deleted`;
 
       socketInstance.on(updateEvent, (payload) => {
         console.log('📡 Atualização em tempo real recebida via Socket.io:', payload);

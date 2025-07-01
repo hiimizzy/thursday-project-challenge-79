@@ -30,6 +30,11 @@ export const useSocketSync = <T,>(options: SocketSyncOptions) => {
     const socketInstance = initializeSocket();
     setSocket(socketInstance);
 
+    // Define event names here so they're available in cleanup
+    const updateEvent = `${options.entityType}:updated`;
+    const createEvent = `${options.entityType}:created`;
+    const deleteEvent = `${options.entityType}:deleted`;
+
     if (socketInstance) {
       // Eventos de conexão
       socketInstance.on('connect', () => {
@@ -48,11 +53,6 @@ export const useSocketSync = <T,>(options: SocketSyncOptions) => {
         console.log(`🔌 Desconectado do Socket.io`);
         setIsConnected(false);
       });
-
-      // Eventos de atualização
-      const updateEvent = `${options.entityType}:updated`;
-      const createEvent = `${options.entityType}:created`;
-      const deleteEvent = `${options.entityType}:deleted`;
 
       socketInstance.on(updateEvent, (data) => {
         console.log('📡 Atualização recebida via Socket.io:', data);
