@@ -255,6 +255,8 @@ export function AppSidebar({
 
       {/* Diálogos */}
       <CreateProjectDialog 
+        open={isCreateProjectOpen}
+        onOpenChange={setIsCreateProjectOpen}
         onCreateProject={handleCreateProject}
       />
       
