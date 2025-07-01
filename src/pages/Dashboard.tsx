@@ -660,10 +660,6 @@ const Dashboard = () => {
       </div>
 
       {/* Diálogos */}
-      <CreateProjectDialog 
-        onCreateProject={handleCreateProject}
-      />
-      
       <InviteMembersDialog 
         open={isInviteOpen}
         onOpenChange={setIsInviteOpen}
