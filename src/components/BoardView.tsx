@@ -506,13 +506,13 @@ const BoardView = ({ project, onUpdateProject }: BoardViewProps) => {
                 {permissions.canDelete && <TableHead className="w-8 sm:w-12"></TableHead>}
               </TableRow>
             </TableHeader>
-            
+
             <TableBody>
               {items.map((item, index) => (
                 <TableRow key={item.id} className={index % 2 === 0 ? 'bg-black-50/50' : 'bg-gray-50/50'}>
 
                   <TableCell className="p-2">
-                    <GripVertical className="h-3 w-3 sm:h-4 sm:w-4 text-white-400 cursor-move" />
+                    <GripVertical className="h-3 w-3 sm:h-4 sm:w-4 text-white-400 cursor-move bg-gray" />
                   </TableCell>
                   {columns.map((column) => (
                     <TableCell key={column.id} className="p-2">
