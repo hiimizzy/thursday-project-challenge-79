@@ -74,7 +74,7 @@ export function AppSidebar({
   onCompanyChange,
   onCreateCompany
 }: AppSidebarProps) {
-  const { state, isMobile } = useSidebar();
+  const { state, isMobile, setOpenMobile } = useSidebar();
   const location = useLocation();
   const navigate = useNavigate();
   const [isCreateProjectOpen, setIsCreateProjectOpen] = useState(false);
@@ -84,6 +84,23 @@ export function AppSidebar({
   const currentPath = location.pathname;
 
   const isActive = (path: string) => currentPath === path;
+
+  const handleCreateProject = (project: Project) => {
+    onCreateProject(project);
+    setIsCreateProjectOpen(false);
+    // Fechar sidebar no mobile após criar projeto
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+  };
+
+  const handleInviteMembers = () => {
+    setIsInviteOpen(true);
+    // Fechar sidebar no mobile ao abrir convite
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+  };
 
   return (
     <Sidebar 
@@ -134,6 +151,26 @@ export function AppSidebar({
 
         <Separator className="my-2" />
 
+        {/* Botão Novo Projeto */}
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton 
+                  onClick={() => setIsCreateProjectOpen(true)}
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                  tooltip={isCollapsed ? "Novo Projeto" : undefined}
+                >
+                  <Plus className="h-4 w-4" />
+                  {!isCollapsed && <span className="ml-2">Novo Projeto</span>}
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <Separator className="my-2" />
+
         {/* Projetos Recentes */}
         <SidebarGroup>
           <SidebarGroupLabel>Projetos Recentes</SidebarGroupLabel>
@@ -161,25 +198,24 @@ export function AppSidebar({
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {/* Ações Rápidas - Apenas Mobile - Somente Convidar Membros */}
-        {isMobile && (
-          <>
-            <Separator className="my-2" />
-            <SidebarGroup>
-              <SidebarGroupLabel>Ações</SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  <SidebarMenuItem>
-                    <SidebarMenuButton onClick={() => setIsInviteOpen(true)}>
-                      <Users className="h-4 w-4" />
-                      <span className="ml-2">Convidar Membros</span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-          </>
-        )}
+        {/* Ações Rápidas - Convidar Membros */}
+        <Separator className="my-2" />
+        <SidebarGroup>
+          <SidebarGroupLabel>Ações</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton 
+                  onClick={handleInviteMembers}
+                  tooltip={isCollapsed ? "Convidar Membros" : undefined}
+                >
+                  <Users className="h-4 w-4" />
+                  {!isCollapsed && <span className="ml-2">Convidar Membros</span>}
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
       </SidebarContent>
 
       <SidebarFooter className="p-4">
@@ -217,13 +253,15 @@ export function AppSidebar({
         </div>
       </SidebarFooter>
 
-      {/* Diálogos - Apenas Mobile - Sem CreateProjectDialog */}
-      {isMobile && (
-        <InviteMembersDialog 
-          open={isInviteOpen}
-          onOpenChange={setIsInviteOpen}
-        />
-      )}
+      {/* Diálogos */}
+      <CreateProjectDialog 
+        onCreateProject={handleCreateProject}
+      />
+      
+      <InviteMembersDialog 
+        open={isInviteOpen}
+        onOpenChange={setIsInviteOpen}
+      />
     </Sidebar>
   );
 }

@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import { SidebarProvider, SidebarTrigger, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from '@/components/AppSidebar';
@@ -10,7 +9,6 @@ import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { 
   Search, 
-  Plus, 
   Calendar, 
   Users, 
   Clock, 
@@ -25,7 +23,6 @@ import {
   CircleHelp
 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import CreateProjectDialog from '@/components/CreateProjectDialog';
 import InviteMembersDialog from '@/components/InviteMembersDialog';
 import ProjectSearch from '@/components/ProjectSearch';
 import { useSocketSync } from '@/hooks/useSocketSync';
@@ -87,7 +84,6 @@ const Dashboard = () => {
   const [companies, setCompanies] = useState<Company[]>(mockCompanies);
   const [currentCompany, setCurrentCompany] = useState<Company | null>(mockCompanies[0]);
   const [profileImage, setProfileImage] = useState('');
-  const [isCreateProjectOpen, setIsCreateProjectOpen] = useState(false);
   const [isInviteOpen, setIsInviteOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [filters, setFilters] = useState<SearchFilters>({
@@ -414,12 +410,6 @@ const Dashboard = () => {
                   <CircleHelp className="h-4 w-4" />
                 </Button>
               } />
-              <Button onClick={() => setIsInviteOpen(true)} variant="outline" size="sm" className="h-8 w-8 p-0">
-                <Users className="h-4 w-4" />
-              </Button>
-              <Button onClick={() => setIsCreateProjectOpen(true)} size="sm" className="h-8 w-8 p-0">
-                <Plus className="h-4 w-4" />
-              </Button>
             </div>
           </header>
 
@@ -443,17 +433,6 @@ const Dashboard = () => {
               <div className="flex gap-2">
                 <ThemeToggle />
                 <HelpDialog />
-                <Button onClick={() => setIsInviteOpen(true)} variant="outline" className="hidden lg:flex">
-                  <Users className="h-4 w-4 mr-2" />
-                  Convidar
-                </Button>
-                <Button onClick={() => setIsInviteOpen(true)} variant="outline" className="lg:hidden">
-                  <Users className="h-4 w-4" />
-                </Button>
-                <Button onClick={() => setIsCreateProjectOpen(true)}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Novo Projeto
-                </Button>
               </div>
             </div>
 
@@ -660,10 +639,6 @@ const Dashboard = () => {
       </div>
 
       {/* Diálogos */}
-      <CreateProjectDialog 
-        onCreateProject={handleCreateProject}
-      />
-      
       <InviteMembersDialog 
         open={isInviteOpen}
         onOpenChange={setIsInviteOpen}
