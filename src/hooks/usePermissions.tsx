@@ -1,5 +1,6 @@
+
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { supabase } from '@/lib/supabase';
+import { getSocket, socketEvents } from '@/lib/socket';
 
 export type UserRole = 'admin' | 'member' | 'viewer';
 
@@ -11,51 +12,39 @@ export interface User {
   name?: string;
 }
 
+// Mock data para demonstração - substitua pela sua API
+const mockUser: User = {
+  id: 'user-1',
+  role: 'admin',
+  companyId: 'company-1',
+  email: 'user@example.com',
+  name: 'Usuário Teste'
+};
+
 export const usePermissions = (companyId: string) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [user, setUser] = useState<User | null>(mockUser);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     const loadUserPermissions = async () => {
       setIsLoading(true);
       
       try {
-        // Obter usuário atual
-        const { data: { user: authUser } } = await supabase.auth.getUser();
+        // Aqui você faria uma chamada para sua API
+        // const response = await fetch('/api/user/permissions');
+        // const userData = await response.json();
         
-        if (!authUser) {
-          setIsLoading(false);
-          return;
-        }
+        // Por enquanto, usando dados mock
+        setUser(mockUser);
 
-        // Buscar papel do usuário na empresa
-        const { data: memberData, error } = await supabase
-          .from('company_members')
-          .select(`
-            role,
-            companies!inner(id, name)
-          `)
-          .eq('company_id', companyId)
-          .eq('user_id', authUser.id)
-          .single();
-
-        if (error) {
-          console.error('❌ Erro ao carregar dados do usuário:', error);
-          // Usuário pode não ser membro desta empresa
-          setUser({
-            id: authUser.id,
-            role: 'viewer',
-            companyId,
-            email: authUser.email,
-            name: authUser.user_metadata?.name
-          });
-        } else {
-          setUser({
-            id: authUser.id,
-            role: memberData.role as UserRole,
-            companyId,
-            email: authUser.email,
-            name: authUser.user_metadata?.name
+        // Conectar ao Socket.io para atualizações de permissões
+        const socket = getSocket();
+        if (socket) {
+          socket.on('permissions:updated', (data) => {
+            console.log('🔄 Permissões atualizadas via Socket.io');
+            if (data.companyId === companyId) {
+              setUser(prevUser => prevUser ? { ...prevUser, role: data.role } : null);
+            }
           });
         }
 
@@ -68,26 +57,11 @@ export const usePermissions = (companyId: string) => {
 
     loadUserPermissions();
 
-    // Escutar mudanças em tempo real
-    const channel = supabase
-      .channel(`user-permissions-${companyId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'company_members',
-          filter: `company_id=eq.${companyId}`
-        },
-        () => {
-          console.log('🔄 Permissões do usuário atualizadas');
-          loadUserPermissions();
-        }
-      )
-      .subscribe();
-
     return () => {
-      channel.unsubscribe();
+      const socket = getSocket();
+      if (socket) {
+        socket.off('permissions:updated');
+      }
     };
   }, [companyId]);
 
@@ -118,7 +92,7 @@ export const usePermissions = (companyId: string) => {
       canManageProject,
       canCreateColumns,
       canDeleteColumns,
-      canView: true // todos podem visualizar se chegaram até aqui
+      canView: true
     };
   }, [user]);
 

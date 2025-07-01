@@ -27,9 +27,9 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import CreateProjectDialog from '@/components/CreateProjectDialog';
 import InviteMembersDialog from '@/components/InviteMembersDialog';
 import ProjectSearch from '@/components/ProjectSearch';
-import { useRealtimeSync } from '@/hooks/useRealtimeSync';
+import { useSocketSync } from '@/hooks/useSocketSync';
 import { usePermissions } from '@/hooks/usePermissions';
-import { supabase } from '@/lib/supabase';
+import { initializeSocket, getSocket, socketEvents } from '@/lib/socket';
 import ThemeToggle from '@/components/ThemeToggle';
 import HelpDialog from '@/components/HelpDialog';
 
@@ -61,14 +61,34 @@ interface SearchFilters {
   assignee: string;
 }
 
+// Mock data para demonstração
+const mockCompanies: Company[] = [
+  { id: 'company-1', name: 'Empresa Demo', role: 'admin' }
+];
+
+const mockProjects: Project[] = [
+  {
+    id: 'project-1',
+    name: 'Projeto Exemplo',
+    description: 'Um projeto de demonstração',
+    status: 'active',
+    members: 3,
+    tasks: 10,
+    completedTasks: 7,
+    dueDate: new Date().toISOString(),
+    favorite: false,
+    companyId: 'company-1'
+  }
+];
+
 const Dashboard = () => {
-  const [allProjects, setAllProjects] = useState<Project[]>([]);
-  const [companies, setCompanies] = useState<Company[]>([]);
-  const [currentCompany, setCurrentCompany] = useState<Company | null>(null);
+  const [allProjects, setAllProjects] = useState<Project[]>(mockProjects);
+  const [companies, setCompanies] = useState<Company[]>(mockCompanies);
+  const [currentCompany, setCurrentCompany] = useState<Company | null>(mockCompanies[0]);
   const [profileImage, setProfileImage] = useState('');
   const [isCreateProjectOpen, setIsCreateProjectOpen] = useState(false);
   const [isInviteOpen, setIsInviteOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [filters, setFilters] = useState<SearchFilters>({
     search: '',
     status: 'all',
@@ -80,110 +100,49 @@ const Dashboard = () => {
   
   const { toast } = useToast();
   
-  // Usar permissões do Supabase
+  // Usar permissões
   const { permissions, user } = usePermissions(currentCompany?.id || '');
   
-  // Sincronização em tempo real
-  useRealtimeSync({
+  // Sincronização em tempo real com Socket.io
+  const { isConnected } = useSocketSync({
+    room: `company-${currentCompany?.id}`,
     entityType: 'company',
     entityId: currentCompany?.id || '',
     onUpdate: (data) => {
-      console.log('📡 Empresa atualizada em tempo real:', data);
+      console.log('📡 Empresa atualizada via Socket.io:', data);
       // Recarregar projetos quando houver atualizações
       if (data.event === 'UPDATE' || data.event === 'INSERT') {
         loadProjects();
       }
     },
     onError: (error) => {
-      console.error('❌ Erro na sincronização:', error);
+      console.error('❌ Erro na sincronização via Socket.io:', error);
     }
   });
 
-  // Carregar dados do Supabase
+  // Inicializar Socket.io
   useEffect(() => {
-    const loadUserData = async () => {
-      setIsLoading(true);
-      
-      try {
-        // Verificar usuário autenticado
-        const { data: { user } } = await supabase.auth.getUser();
-        
-        if (!user) {
-          console.log('❌ Usuário não autenticado');
-          setIsLoading(false);
-          return;
-        }
-
-        // Carregar empresas do usuário
-        const { data: companiesData, error: companiesError } = await supabase
-          .from('company_members')
-          .select(`
-            role,
-            company_id,
-            companies!inner(id, name, created_at)
-          `)
-          .eq('user_id', user.id);
-
-        if (companiesError) {
-          console.error('❌ Erro ao carregar empresas:', companiesError);
-        } else {
-          const userCompanies = companiesData?.map(item => ({
-            id: item.company_id,
-            name: (item.companies as any).name,
-            role: item.role as 'admin' | 'member' | 'viewer'
-          })) || [];
-          
-          setCompanies(userCompanies);
-          
-          if (userCompanies.length > 0) {
-            setCurrentCompany(userCompanies[0]);
-          }
-        }
-
-      } catch (error) {
-        console.error('❌ Erro ao carregar dados do usuário:', error);
-        toast({
-          title: "❌ Erro ao carregar dados",
-          description: "Tente recarregar a página",
-          variant: "destructive"
-        });
-      } finally {
-        setIsLoading(false);
-      }
+    const socket = initializeSocket();
+    console.log('🔗 Socket.io inicializado no Dashboard');
+    
+    return () => {
+      console.log('🔌 Limpando conexão Socket.io do Dashboard');
     };
-
-    loadUserData();
-  }, [toast]);
+  }, []);
 
   // Carregar projetos da empresa atual
   const loadProjects = useCallback(async () => {
     if (!currentCompany || !user) return;
 
     try {
-      const { data: projectsData, error } = await supabase
-        .from('projects')
-        .select('*')
-        .eq('company_id', currentCompany.id)
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.error('❌ Erro ao carregar projetos:', error);
-      } else {
-        const mappedProjects = projectsData.map(project => ({
-          id: project.id,
-          name: project.name,
-          description: project.description || '',
-          status: project.status,
-          members: project.members || 1,
-          tasks: project.tasks || 0,
-          completedTasks: project.completed_tasks || 0,
-          dueDate: project.due_date || new Date().toISOString(),
-          favorite: project.favorite || false,
-          companyId: project.company_id
-        }));
-        
-        setAllProjects(mappedProjects);
-      }
+      // Aqui você faria uma chamada para sua API
+      // const response = await fetch(`/api/projects?companyId=${currentCompany.id}`);
+      // const projectsData = await response.json();
+      
+      // Por enquanto, usando dados mock
+      console.log('📂 Carregando projetos da empresa:', currentCompany.name);
+      setAllProjects(mockProjects);
+      
     } catch (error) {
       console.error('❌ Erro ao carregar projetos:', error);
     }
@@ -193,7 +152,6 @@ const Dashboard = () => {
     loadProjects();
   }, [loadProjects]);
 
-  // Fix NaN% calculation
   const getProgressPercentage = (completed: number, total: number) => {
     if (total === 0) return 0;
     return Math.round((completed / total) * 100);
@@ -213,44 +171,33 @@ const Dashboard = () => {
     }
 
     try {
-      const { data, error } = await supabase
-        .from('projects')
-        .insert({
-          name: newProject.name,
-          description: newProject.description,
-          company_id: currentCompany.id,
-          status: 'active',
-          created_by: user.id,
-          members: 1,
-          tasks: 0,
-          completed_tasks: 0,
-          due_date: newProject.dueDate,
-          favorite: false
-        })
-        .select()
-        .single();
-
-      if (error) {
-        console.error('❌ Erro ao criar projeto:', error);
-        throw error;
-      }
-
-      // Atualizar lista local
-      const projectWithCompany = {
-        id: data.id,
-        name: data.name,
-        description: data.description || '',
-        status: data.status,
-        members: data.members || 1,
-        tasks: data.tasks || 0,
-        completedTasks: data.completed_tasks || 0,
-        dueDate: data.due_date || new Date().toISOString(),
-        favorite: data.favorite || false,
-        companyId: data.company_id
+      // Simular chamada para API
+      const projectData = {
+        id: Date.now().toString(),
+        name: newProject.name,
+        description: newProject.description,
+        companyId: currentCompany.id,
+        status: 'active' as const,
+        members: 1,
+        tasks: 0,
+        completedTasks: 0,
+        dueDate: newProject.dueDate,
+        favorite: false
       };
 
-      setAllProjects(prev => [projectWithCompany, ...prev]);
+      // Atualizar lista local
+      setAllProjects(prev => [projectData, ...prev]);
       setIsCreateProjectOpen(false);
+      
+      // Emitir evento via Socket.io
+      const socket = getSocket();
+      if (socket) {
+        socket.emit(socketEvents.PROJECT_CREATED, {
+          project: projectData,
+          companyId: currentCompany.id,
+          user: user.name || user.email
+        });
+      }
       
       toast({
         title: "✅ Projeto criado!",
@@ -279,22 +226,27 @@ const Dashboard = () => {
     ));
 
     try {
-      const { error } = await supabase
-        .from('projects')
-        .update({ favorite: !project.favorite })
-        .eq('id', projectId);
-
-      if (error) {
-        console.error('❌ Erro ao atualizar favorito:', error);
-        // Reverter mudança em caso de erro
-        setAllProjects(allProjects.map(project => 
-          project.id === projectId 
-            ? { ...project, favorite: project.favorite }
-            : project
-        ));
+      // Simular chamada para API
+      console.log('⭐ Alternando favorito do projeto:', projectId);
+      
+      // Emitir evento via Socket.io
+      const socket = getSocket();
+      if (socket) {
+        socket.emit(socketEvents.PROJECT_UPDATED, {
+          projectId,
+          favorite: !project.favorite,
+          user: user.name || user.email
+        });
       }
+      
     } catch (error) {
       console.error('❌ Erro ao atualizar favorito:', error);
+      // Reverter mudança em caso de erro
+      setAllProjects(allProjects.map(project => 
+        project.id === projectId 
+          ? { ...project, favorite: project.favorite }
+          : project
+      ));
     }
   };
 
@@ -309,17 +261,19 @@ const Dashboard = () => {
     }
 
     try {
-      const { error } = await supabase
-        .from('projects')
-        .delete()
-        .eq('id', projectId);
-
-      if (error) {
-        console.error('❌ Erro ao deletar projeto:', error);
-        throw error;
-      }
-
+      // Simular chamada para API
+      console.log('🗑️ Deletando projeto:', projectId);
+      
       setAllProjects(allProjects.filter(project => project.id !== projectId));
+      
+      // Emitir evento via Socket.io
+      const socket = getSocket();
+      if (socket) {
+        socket.emit(socketEvents.PROJECT_DELETED, {
+          projectId,
+          user: user.name || user.email
+        });
+      }
       
       toast({
         title: "✅ Projeto excluído",
@@ -369,7 +323,6 @@ const Dashboard = () => {
     });
   };
 
-  // Aplicar filtros
   const filteredProjects = projects?.filter(project => {
     const matchesSearch = project.name.toLowerCase().includes(filters.search.toLowerCase()) ||
                          project.description.toLowerCase().includes(filters.search.toLowerCase());
@@ -411,9 +364,6 @@ const Dashboard = () => {
     }
   };
 
-  // Filtrar projetos pela empresa atual
-  
-
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-slate-900 flex items-center justify-center">
@@ -450,12 +400,12 @@ const Dashboard = () => {
         />
         
         <SidebarInset className="flex-1">
-          {/* Header Mobile */}
           <header className="flex h-14 shrink-0 items-center gap-2 border-b px-3 sm:px-4 md:hidden">
             <SidebarTrigger className="h-8 w-8" />
             <div className="flex items-center gap-2 flex-1 min-w-0">
               <Building className="h-4 w-4 text-blue-600 flex-shrink-0" />
               <h1 className="text-base font-semibold truncate">{currentCompany.name}</h1>
+              {isConnected && <div className="h-2 w-2 bg-green-500 rounded-full" title="Socket.io Conectado" />}
             </div>
             <div className="flex gap-1">
               <ThemeToggle />
@@ -477,7 +427,15 @@ const Dashboard = () => {
             {/* Header Desktop */}
             <div className="hidden md:flex md:items-center md:justify-between">
               <div>
-                <h1 className="text-2xl lg:text-3xl font-bold tracking-tight">Dashboard</h1>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-2xl lg:text-3xl font-bold tracking-tight">Dashboard</h1>
+                  {isConnected && (
+                    <div className="flex items-center gap-1 text-xs text-green-600">
+                      <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse" />
+                      Socket.io
+                    </div>
+                  )}
+                </div>
                 <p className="text-muted-foreground text-sm lg:text-base">
                   Gerencie seus projetos em {currentCompany.name}
                 </p>
@@ -499,7 +457,6 @@ const Dashboard = () => {
               </div>
             </div>
 
-            {/* Busca e Filtros Avançados */}
             <ProjectSearch 
               filters={filters}
               onFiltersChange={setFilters}

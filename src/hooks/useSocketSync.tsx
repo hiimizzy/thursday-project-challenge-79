@@ -4,7 +4,8 @@ import { useToast } from "@/hooks/use-toast";
 import { initializeSocket, getSocket, socketEvents } from '@/lib/socket';
 import type { Socket } from 'socket.io-client';
 
-interface RealtimeHookOptions {
+interface SocketSyncOptions {
+  room: string;
   entityType: 'project' | 'task' | 'company';
   entityId: string;
   onUpdate?: (data: any) => void;
@@ -18,27 +19,26 @@ interface OptimisticUpdate<T> {
   status: 'pending' | 'confirmed' | 'failed';
 }
 
-export const useRealtimeSync = <T,>(options: RealtimeHookOptions) => {
+export const useSocketSync = <T,>(options: SocketSyncOptions) => {
   const [isConnected, setIsConnected] = useState(false);
   const [optimisticUpdates, setOptimisticUpdates] = useState<OptimisticUpdate<T>[]>([]);
   const [socket, setSocket] = useState<Socket | null>(null);
   const { toast } = useToast();
 
-  // Configurar sincronização em tempo real com Socket.io
+  // Inicializar Socket.io
   useEffect(() => {
     const socketInstance = initializeSocket();
     setSocket(socketInstance);
-    
-    console.log(`🔗 Conectando via Socket.io: ${options.entityType}-${options.entityId}`);
 
     if (socketInstance) {
+      // Eventos de conexão
       socketInstance.on('connect', () => {
-        console.log(`📡 Conectado via Socket.io`);
+        console.log(`🔗 Conectado ao Socket.io para ${options.entityType}:${options.entityId}`);
         setIsConnected(true);
-
+        
         // Entrar na sala específica
         socketInstance.emit(socketEvents.JOIN_ROOM, {
-          room: `${options.entityType}-${options.entityId}`,
+          room: options.room,
           entityType: options.entityType,
           entityId: options.entityId
         });
@@ -49,19 +49,19 @@ export const useRealtimeSync = <T,>(options: RealtimeHookOptions) => {
         setIsConnected(false);
       });
 
-      // Escutar atualizações específicas do tipo de entidade
+      // Eventos de atualização
       const updateEvent = `${options.entityType}:updated`;
       const createEvent = `${options.entityType}:created`;
       const deleteEvent = `${options.entityType}:deleted`;
 
-      socketInstance.on(updateEvent, (payload) => {
-        console.log('📡 Atualização em tempo real recebida via Socket.io:', payload);
+      socketInstance.on(updateEvent, (data) => {
+        console.log('📡 Atualização recebida via Socket.io:', data);
         
         const updateData = {
           id: Date.now().toString(),
           type: options.entityType,
-          data: payload.data,
-          user: payload.user || 'Outro usuário',
+          data: data,
+          user: data.user || 'Outro usuário',
           event: 'UPDATE'
         };
         
@@ -69,28 +69,28 @@ export const useRealtimeSync = <T,>(options: RealtimeHookOptions) => {
         
         toast({
           title: "🔄 Atualização recebida",
-          description: `Dados foram atualizados por ${payload.user || 'outro usuário'}`,
+          description: `Dados foram atualizados por ${data.user || 'outro usuário'}`,
         });
       });
 
-      socketInstance.on(createEvent, (payload) => {
-        console.log('📡 Criação recebida via Socket.io:', payload);
+      socketInstance.on(createEvent, (data) => {
+        console.log('📡 Criação recebida via Socket.io:', data);
         options.onUpdate?.({
           id: Date.now().toString(),
           type: options.entityType,
-          data: payload.data,
-          user: payload.user || 'Outro usuário',
+          data: data,
+          user: data.user || 'Outro usuário',
           event: 'CREATE'
         });
       });
 
-      socketInstance.on(deleteEvent, (payload) => {
-        console.log('📡 Exclusão recebida via Socket.io:', payload);
+      socketInstance.on(deleteEvent, (data) => {
+        console.log('📡 Exclusão recebida via Socket.io:', data);
         options.onUpdate?.({
           id: Date.now().toString(),
           type: options.entityType,
-          data: payload.data,
-          user: payload.user || 'Outro usuário',
+          data: data,
+          user: data.user || 'Outro usuário',
           event: 'DELETE'
         });
       });
@@ -98,12 +98,9 @@ export const useRealtimeSync = <T,>(options: RealtimeHookOptions) => {
 
     return () => {
       if (socketInstance) {
-        console.log(`🔌 Desconectando do Socket.io: ${options.entityType}-${options.entityId}`);
-        
         socketInstance.emit(socketEvents.LEAVE_ROOM, {
-          room: `${options.entityType}-${options.entityId}`
+          room: options.room
         });
-        
         socketInstance.off('connect');
         socketInstance.off('disconnect');
         socketInstance.off(updateEvent);
@@ -111,7 +108,7 @@ export const useRealtimeSync = <T,>(options: RealtimeHookOptions) => {
         socketInstance.off(deleteEvent);
       }
     };
-  }, [options.entityType, options.entityId]);
+  }, [options.entityType, options.entityId, options.room]);
 
   // Atualização otimística com Socket.io
   const optimisticUpdate = useCallback(async (data: T, serverUpdate: () => Promise<T>) => {
@@ -128,10 +125,10 @@ export const useRealtimeSync = <T,>(options: RealtimeHookOptions) => {
     setOptimisticUpdates(prev => [...prev, optimisticData]);
     
     try {
-      // 2. Enviar para o servidor
+      // 2. Enviar para o servidor via Socket.io
       const serverResponse = await serverUpdate();
       
-      // 3. Emitir evento via Socket.io para outros clientes
+      // 3. Emitir evento para outros clientes
       if (socket) {
         socket.emit(`${options.entityType}:update`, {
           entityId: options.entityId,
@@ -182,85 +179,22 @@ export const useRealtimeSync = <T,>(options: RealtimeHookOptions) => {
     }
   }, [socket, toast, options.entityType, options.entityId, options.onError]);
 
+  const emitUpdate = useCallback((eventType: string, data: any) => {
+    if (socket && isConnected) {
+      socket.emit(eventType, {
+        ...data,
+        entityId: options.entityId,
+        timestamp: Date.now()
+      });
+    }
+  }, [socket, isConnected, options.entityId]);
+
   return {
     isConnected,
     optimisticUpdate,
+    emitUpdate,
+    socket,
     pendingUpdates: optimisticUpdates.filter(u => u.status === 'pending'),
     failedUpdates: optimisticUpdates.filter(u => u.status === 'failed')
-  };
-};
-
-// Hook para verificação de permissões em tempo real com Socket.io
-export const usePermissions = (companyId: string, userId?: string) => {
-  const [permissions, setPermissions] = useState({
-    canCreateProjects: false,
-    canEditProjects: false,
-    canDeleteProjects: false,
-    canInviteMembers: false,
-    canManageCompany: false,
-    role: 'viewer' as 'admin' | 'member' | 'viewer'
-  });
-
-  const [isLoading, setIsLoading] = useState(false);
-  const [user, setUser] = useState<any>({
-    id: 'user-1',
-    email: 'user@example.com',
-    name: 'Usuário Teste'
-  });
-
-  useEffect(() => {
-    const loadPermissions = async () => {
-      setIsLoading(true);
-      
-      try {
-        // Mock data - substitua pela sua API
-        const userRole = 'admin';
-        const newPermissions = {
-          canCreateProjects: userRole === 'admin' || userRole === 'member',
-          canEditProjects: userRole === 'admin' || userRole === 'member',
-          canDeleteProjects: userRole === 'admin',
-          canInviteMembers: userRole === 'admin',
-          canManageCompany: userRole === 'admin',
-          role: userRole as 'admin' | 'member' | 'viewer'
-        };
-        
-        setPermissions(newPermissions);
-        console.log('🔐 Permissões carregadas:', newPermissions);
-        
-      } catch (error) {
-        console.error('❌ Erro ao carregar permissões:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadPermissions();
-
-    // Escutar mudanças nas permissões via Socket.io
-    const socket = getSocket();
-    if (socket) {
-      socket.on('permissions:updated', (data) => {
-        console.log('🔄 Permissões atualizadas via Socket.io, recarregando...');
-        if (data.companyId === companyId) {
-          loadPermissions();
-        }
-      });
-
-      return () => {
-        socket.off('permissions:updated');
-      };
-    }
-  }, [companyId]);
-
-  const hasPermission = useCallback((action: keyof typeof permissions) => {
-    return permissions[action] === true;
-  }, [permissions]);
-
-  return {
-    permissions,
-    isLoading,
-    hasPermission,
-    role: permissions.role,
-    user
   };
 };

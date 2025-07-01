@@ -14,8 +14,7 @@ import { ptBR } from 'date-fns/locale';
 import { useOptimisticUpdates } from '@/hooks/useOptimisticUpdates';
 import { useAutoSave } from '@/hooks/useAutoSave';
 import { usePermissions, UserRole } from '@/hooks/usePermissions';
-import { useRealtimeSync } from '@/hooks/useRealtimeSync';
-import { supabase } from '@/lib/supabase';
+import { useSocketSync } from '@/hooks/useSocketSync';
 
 interface Column {
   id: string;
@@ -43,16 +42,17 @@ const BoardView = ({ project, onUpdateProject }: BoardViewProps) => {
   const [newColumnType, setNewColumnType] = useState<Column['type']>('text');
   const [newColumnOptions, setNewColumnOptions] = useState('');
 
-  // Usar permissões do Supabase
+  // Usar permissões
   const { permissions, isLoading: permissionsLoading, user } = usePermissions(project.companyId);
   const { addOptimisticAction, hasPendingActions } = useOptimisticUpdates();
 
-  // Sincronização em tempo real
-  const { isConnected } = useRealtimeSync({
+  // Sincronização em tempo real com Socket.io
+  const { isConnected } = useSocketSync({
+    room: `project-${project.id}`,
     entityType: 'project',
     entityId: project.id,
     onUpdate: (data) => {
-      console.log('📡 Projeto atualizado em tempo real:', data);
+      console.log('📡 Projeto atualizado via Socket.io:', data);
       // Recarregar dados do projeto quando houver atualizações
       if (data.event === 'UPDATE') {
         // Atualizar estado local com dados do servidor
@@ -61,37 +61,26 @@ const BoardView = ({ project, onUpdateProject }: BoardViewProps) => {
       }
     },
     onError: (error) => {
-      console.error('❌ Erro na sincronização:', error);
+      console.error('❌ Erro na sincronização via Socket.io:', error);
     }
   });
 
-  // Auto-save para Supabase
+  // Auto-save simulado (substitua pela sua API)
   const saveProjectData = useCallback(async (data: any) => {
     if (!user) return;
     
     try {
-      console.log('💾 Salvando projeto no Supabase...', data);
+      console.log('💾 Salvando projeto via API...', data);
       
-      const { error } = await supabase
-        .from('projects')
-        .update({
-          columns: data.columns,
-          items: data.items,
-          tasks: data.items?.length || 0,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', project.id);
-
-      if (error) {
-        console.error('❌ Erro ao salvar projeto:', error);
-        throw error;
-      }
-
+      // Simular chamada para API
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
       console.log('✅ Projeto salvo com sucesso');
       onUpdateProject({ ...project, ...data });
       
     } catch (error) {
-      console.error('❌ Erro ao salvar no Supabase:', error);
+      console.error('❌ Erro ao salvar projeto:', error);
+      throw error;
     }
   }, [project, onUpdateProject, user]);
 
@@ -251,6 +240,7 @@ const BoardView = ({ project, onUpdateProject }: BoardViewProps) => {
     onUpdateProject(updatedProject);
   };
 
+  // Renderizar conteúdo da célula com base no tipo da coluna
   const renderCellContent = (item: Item, column: Column) => {
     const value = item[column.id];
 
@@ -393,12 +383,12 @@ const BoardView = ({ project, onUpdateProject }: BoardViewProps) => {
             ) : isConnected ? (
               <div className="flex items-center gap-1 text-xs text-green-600">
                 <Wifi className="h-3 w-3" />
-                Sincronizado
+                Socket.io Conectado
               </div>
             ) : (
               <div className="flex items-center gap-1 text-xs text-red-600">
                 <WifiOff className="h-3 w-3" />
-                Desconectado
+                Socket.io Desconectado
               </div>
             )}
           </div>
