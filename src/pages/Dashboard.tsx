@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from 'react';
 import { SidebarProvider, SidebarTrigger, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from '@/components/AppSidebar';
@@ -187,7 +188,6 @@ const Dashboard = () => {
 
       // Atualizar lista local
       setAllProjects(prev => [projectData, ...prev]);
-      setIsCreateProjectOpen(false);
       
       // Emitir evento via Socket.io
       const socket = getSocket();
@@ -660,6 +660,10 @@ const Dashboard = () => {
       </div>
 
       {/* Diálogos */}
+      <CreateProjectDialog 
+        onCreateProject={handleCreateProject}
+      />
+      
       <InviteMembersDialog 
         open={isInviteOpen}
         onOpenChange={setIsInviteOpen}
