@@ -132,7 +132,7 @@ const Dashboard = () => {
     if (!currentCompany || !user) return;
 
     try {
-      // Aqui você faria uma chamada para sua API
+      // Chamar API
       // const response = await fetch(`/api/projects?companyId=${currentCompany.id}`);
       // const projectsData = await response.json();
       
@@ -549,14 +549,14 @@ const Dashboard = () => {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem>
+                              {/* <DropdownMenuItem>
                                 <Eye className="mr-2 h-4 w-4" />
                                 Visualizar
                               </DropdownMenuItem>
                               <DropdownMenuItem>
                                 <Edit className="mr-2 h-4 w-4" />
                                 Editar
-                              </DropdownMenuItem>
+                              </DropdownMenuItem> */}
                               <DropdownMenuItem 
                                 className="text-red-600"
                                 onClick={() => deleteProject(project.id)}
