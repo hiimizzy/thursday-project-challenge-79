@@ -7,11 +7,21 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { UserPlus, Mail, X, Send } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
+import emailjs from '@emailjs/browser';
+
 
 interface InviteMembersDialogProps {
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 }
+
+// configurações emailjs
+const emailjsConfig = {
+    serviceId: 'service_eeqq7lx',
+    templateId: 'template_spjym7k',
+    publicKey: '8xB0j44NLXOwhu8Q7'
+  };
+
 
 interface PendingInvite {
   id: string;
@@ -43,32 +53,82 @@ const InviteMembersDialog = ({ open, onOpenChange }: InviteMembersDialogProps) =
     setInvites(invites.filter(invite => invite.id !== id));
   };
 
+  // const sendInvites = async () => {
+  //   if (invites.length === 0) return;
+
+  //   setIsSending(true);
+
+  //   try {
+  //     // Simular envio de emails
+  //     await new Promise(resolve => setTimeout(resolve, 2000));
+
+  //     toast({
+  //       title: "Convites enviados!",
+  //       description: `${invites.length} convite(s) enviado(s) com sucesso.`,
+  //     });
+
+  //     setInvites([]);
+  //     onOpenChange?.(false);
+  //   } catch (error) {
+  //     toast({
+  //       title: "Erro ao enviar convites",
+  //       description: "Tente novamente em alguns instantes.",
+  //       variant: "destructive"
+  //     });
+  //   } finally {
+  //     setIsSending(false);
+  //   }
+  // };
+
+
+
   const sendInvites = async () => {
-    if (invites.length === 0) return;
-    
-    setIsSending(true);
-    
-    try {
-      // Simular envio de emails
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      toast({
-        title: "Convites enviados!",
-        description: `${invites.length} convite(s) enviado(s) com sucesso.`,
-      });
-      
-      setInvites([]);
-      onOpenChange?.(false);
-    } catch (error) {
-      toast({
-        title: "Erro ao enviar convites",
-        description: "Tente novamente em alguns instantes.",
-        variant: "destructive"
-      });
-    } finally {
-      setIsSending(false);
+  if (invites.length === 0) return;
+
+  setIsSending(true);
+
+  try {
+    for (const invite of invites) {
+
+      console.log("Enviando convite para:", invite.email);
+       if (!invite.email || !invite.email.includes("@")) {
+      console.error("Email inválido:", invite);
+      continue; 
+      }
+
+      await emailjs.send(
+        emailjsConfig.serviceId,
+        emailjsConfig.templateId,
+        {
+        to_email: 'seuemail@exemplo.com',
+        message: 'Você foi convidado para colaborar em nossa plataforma!',
+        role: 'Membro',
+        custom_message: 'Estamos felizes em ter você com a gente!',
+        },
+        emailjsConfig.publicKey
+      );
     }
-  };
+
+    toast({
+      title: "Convites enviados!",
+      description: `${invites.length} convite(s) enviado(s) com sucesso.`,
+    });
+
+    setInvites([]);
+    onOpenChange?.(false);
+
+  } catch (error) {
+    console.error("Erro ao enviar e-mails:", error);
+    toast({
+      title: "Erro ao enviar convites",
+      description: "Tente novamente em alguns instantes.",
+      variant: "destructive"
+    });
+  } finally {
+    setIsSending(false);
+  }
+};
+
 
   const getRoleLabel = (role: string) => {
     switch (role) {
@@ -91,7 +151,7 @@ const InviteMembersDialog = ({ open, onOpenChange }: InviteMembersDialogProps) =
             Convide pessoas para colaborar na sua empresa
           </DialogDescription>
         </DialogHeader>
-        
+
         <div className="space-y-4">
           <div className="space-y-3">
             <div className="space-y-2">
@@ -105,7 +165,7 @@ const InviteMembersDialog = ({ open, onOpenChange }: InviteMembersDialogProps) =
                 onKeyPress={(e) => e.key === 'Enter' && addInvite()}
               />
             </div>
-            
+
             <div className="space-y-2">
               <Label htmlFor="role">Função</Label>
               <Select value={newRole} onValueChange={(value: 'admin' | 'member' | 'viewer') => setNewRole(value)}>
@@ -119,8 +179,8 @@ const InviteMembersDialog = ({ open, onOpenChange }: InviteMembersDialogProps) =
                 </SelectContent>
               </Select>
             </div>
-            
-            <Button 
+
+            <Button
               onClick={addInvite}
               disabled={!newEmail || !newEmail.includes('@')}
               variant="outline"
@@ -136,7 +196,7 @@ const InviteMembersDialog = ({ open, onOpenChange }: InviteMembersDialogProps) =
                 <h4 className="font-medium text-sm mb-3">
                   Convites pendentes ({invites.length})
                 </h4>
-                
+
                 <div className="space-y-2 max-h-40 overflow-y-auto">
                   {invites.map((invite) => (
                     <div key={invite.id} className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-800 rounded">
@@ -171,16 +231,16 @@ const InviteMembersDialog = ({ open, onOpenChange }: InviteMembersDialogProps) =
             </ul>
           </div>
         </div>
-        
+
         <div className="flex gap-2 pt-4 border-t">
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             onClick={() => onOpenChange?.(false)}
             className="flex-1"
           >
             Cancelar
           </Button>
-          <Button 
+          <Button
             onClick={sendInvites}
             disabled={invites.length === 0 || isSending}
             className="flex-1"

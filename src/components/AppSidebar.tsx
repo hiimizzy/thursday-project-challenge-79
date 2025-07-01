@@ -102,6 +102,8 @@ export function AppSidebar({
     }
   };
 
+  const isDesktop = !isMobile; 
+
   return (
     <Sidebar 
       className={isCollapsed ? "w-14" : "w-64"} 
@@ -152,7 +154,7 @@ export function AppSidebar({
         <Separator className="my-2" />
 
         {/* Botão Novo Projeto */}
-        <SidebarGroup>
+        {/* <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
@@ -169,7 +171,12 @@ export function AppSidebar({
           </SidebarGroupContent>
         </SidebarGroup>
 
-        <Separator className="my-2" />
+        <Separator className="my-2" /> */}
+
+        <InviteMembersDialog 
+        open={isInviteOpen}
+        onOpenChange={setIsInviteOpen}
+      />
 
         {/* Projetos Recentes */}
         <SidebarGroup>
@@ -238,6 +245,22 @@ export function AppSidebar({
             </div>
           )}
 
+          
+          <CreateProjectDialog onCreateProject={handleCreateProject}/>
+
+
+          {isDesktop && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate('/')}
+              className="w-full text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+            >
+              <LogOut className="h-4 w-4 mr-2" />
+              Sair
+            </Button>
+          )}
+
           {/* Botão Sair - Apenas Mobile */}
           {isMobile && (
             <Button
@@ -249,16 +272,14 @@ export function AppSidebar({
               <LogOut className="h-4 w-4 mr-2" />
               Sair
             </Button>
+
+            
           )}
         </div>
       </SidebarFooter>
 
       {/* Diálogos */}
-      <CreateProjectDialog 
-        open={isCreateProjectOpen}
-        onOpenChange={setIsCreateProjectOpen}
-        onCreateProject={handleCreateProject}
-      />
+    
       
       <InviteMembersDialog 
         open={isInviteOpen}
