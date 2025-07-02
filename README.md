@@ -4,6 +4,10 @@
 
 **URL**: https://lovable.dev/projects/4988d2e7-fa15-43b7-a31c-ba76abcf82f2
 
+Vercel: https://thursday-project-25.vercel.app/
+
+Loom: https://www.loom.com/share/ed4b9dee98424ba389fc8d1fc75f4553?sid=f98ce738-cf33-4178-9e56-0adeb805630e
+
 ## How can I edit this code?
 
 There are several ways of editing your application.
